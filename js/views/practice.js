@@ -42,19 +42,20 @@ export async function renderPractice(main, params, state = {}) {
     targetVal.textContent = useTarget ? `${midiName(target)}（${midiNameJa(target)}）` : '自由（近い音）';
   };
   const modeSeg = h('div.seg',
-    [['longtone', 'ロングトーン'], ['attack', '音の入り']].map(([id, label]) =>
+    [['longtone', 'ロングトーン'], ['attack', '音の入り'], ['scale', '音階']].map(([id, label]) =>
       h('button', {
         class: id === mode ? 'on' : '',
         onclick: (e) => {
           mode = id;
           for (const b of modeSeg.children) b.classList.remove('on');
           e.currentTarget.classList.add('on');
-          if (mode === 'attack' && !useTarget) {
+          if ((mode === 'attack' || mode === 'scale') && !useTarget) {
             useTarget = true;
             renderTarget();
           }
           updateHelp();
           statDurLabel.textContent = mode === 'attack' ? '到達時間' : '伸ばした時間';
+          scaleCard.hidden = mode !== 'scale';
           save();
         },
       }, label)
@@ -64,8 +65,83 @@ export async function renderPractice(main, params, state = {}) {
     modeHelp.textContent =
       mode === 'longtone'
         ? '「あー」と 5〜10 秒まっすぐ伸ばしましょう。伸ばし終わると、平均のズレと揺れを採点します。目標：ズレ ±10c 以内・揺れ 8c 以下。'
-        : '基準音を聞いてから、息を吸って一発で「ア」と入りましょう。目標の音に届くまでの時間を測ります。目標：100ms 以内。';
+        : mode === 'attack'
+          ? '基準音を聞いてから、息を吸って一発で「ア」と入りましょう。目標の音に届くまでの時間を測ります。目標：100ms 以内。'
+          : '「ドレミファソファミレド」を基準音と一緒に「あ」や「ま」で歌います（イヤホン必須）。1 音ずつのズレを表示します。目標の音＝ド（主音）です。';
   };
+
+  // ---------- 音階練習 ----------
+  const SCALE = [0, 2, 4, 5, 7, 5, 4, 2, 0];
+  const scaleBars = h('div.scale-bars');
+  const scaleBtn = h('button.btn.primary.block', { onclick: () => runScale() }, '▶ 音階スタート');
+  const tempoSel = h('select.input', { style: { width: 'auto' } },
+    h('option', { value: '0.9' }, 'ゆっくり'),
+    h('option', { value: '0.65', selected: true }, 'ふつう'),
+    h('option', { value: '0.45' }, '速め')
+  );
+  const scaleCard = h('div.card', { hidden: mode !== 'scale' },
+    h('div.row', h('h2.grow', { style: { margin: 0 } }, '音階練習'), tempoSel),
+    scaleBars,
+    scaleBtn
+  );
+  let scaleRun = null;
+  const renderBars = (results) => {
+    scaleBars.innerHTML = '';
+    SCALE.forEach((st, i) => {
+      const r = results ? results[i] : null;
+      const dev = r && r.dev != null ? r.dev : null;
+      const hgt = dev == null ? 0 : Math.min(50, Math.abs(dev));
+      const col = dev == null ? cssVar('--text3') : devColor(Math.abs(dev));
+      scaleBars.append(
+        h('div.sb',
+          h('div.sb-track', h('i', { style: { height: `${hgt}%`, background: col, [dev != null && dev < 0 ? 'top' : 'bottom']: '50%' } })),
+          h('div.sb-v', { style: { color: col } }, dev == null ? '–' : `${dev > 0 ? '+' : ''}${Math.round(dev)}`),
+          h('div.sb-n', midiName(target + st).replace(/\d+$/, ''))
+        )
+      );
+    });
+  };
+  renderBars(null);
+
+  async function runScale() {
+    if (scaleRun) return;
+    if (!live) await toggle();
+    if (!live) return;
+    await eng.ensureContext();
+    const noteDur = +tempoSel.value;
+    const ctxT0 = eng.ctx.currentTime + 0.8; // 最初の音の開始（0.8 秒後）
+    // 同じ瞬間の解析フレーム上の時刻（フレームは窓の中心時刻＋ワーカーの遅れで約 50ms 古い）＋声の遅れ
+    const frameT0 = lastFrameT + 0.05 + 0.8 + eng.roundTripLatency;
+    SCALE.forEach((st, i) => eng.scheduleTone(midiToHz(target + st), ctxT0 + i * noteDur, noteDur * 0.95));
+    scaleRun = { frames: [], frameT0, noteDur };
+    scaleBtn.disabled = true;
+    scaleBtn.textContent = '歌ってください…';
+    renderBars(null);
+    await new Promise((r) => setTimeout(r, (0.8 + SCALE.length * noteDur + 0.6) * 1000));
+    const run = scaleRun;
+    scaleRun = null;
+    scaleBtn.disabled = false;
+    scaleBtn.textContent = '▶ もう一度';
+    const results = SCALE.map((st, i) => {
+      const a = run.frameT0 + (i + 0.3) * run.noteDur;
+      const b = run.frameT0 + (i + 0.85) * run.noteDur;
+      const ms = run.frames.filter((f) => f.t >= a && f.t <= b).map((f) => f.m);
+      if (ms.length < 4) return { dev: null };
+      let d = (median(ms) - (target + st)) * 100;
+      d -= 1200 * Math.round(d / 1200); // オクターブ違い（男性が女性キーで等）は許容
+      return { dev: d };
+    });
+    renderBars(results);
+    const sung = results.filter((r) => r.dev != null);
+    if (sung.length < 5) {
+      toast('声がうまく拾えませんでした。イヤホンで基準音を聞きながら歌ってください');
+      return;
+    }
+    const avg = mean(sung.map((r) => Math.abs(r.dev)));
+    const worst = sung.reduce((a, r) => (Math.abs(r.dev) > Math.abs(a.dev) ? r : a));
+    const score = Math.round(mean(sung.map((r) => pl(Math.abs(r.dev), [[8, 100], [15, 90], [25, 70], [40, 45], [60, 20]]))) * (sung.length / SCALE.length));
+    addTrial(`音階 ${midiName(target)}`, `平均ズレ ${Math.round(avg)}c・最大 ${worst.dev > 0 ? '+' : ''}${Math.round(worst.dev)}c`, score);
+  }
   updateHelp();
   renderTarget();
 
@@ -93,6 +169,7 @@ export async function renderPractice(main, params, state = {}) {
         ),
         h('div.tiny.center', { style: { marginTop: '6px' } }, '男性の目安 mid1G〜mid2E（G3〜E4）、女性の目安 mid2C〜hiC（C4〜C5）')
       ),
+      scaleCard,
       startBtn,
       h('div.card', { style: { marginTop: '14px' } }, h('h2', '今回の記録'), trialList, h('div.tiny', 'イヤホンで基準音を聴くと、声と混ざらず正確に測れます。'))
     )
@@ -147,8 +224,11 @@ export async function renderPractice(main, params, state = {}) {
   };
 
   // ---------- 解析 ----------
+  let lastFrameT = 0;
   const onFrames = (frames) => {
     for (const f of frames) {
+      lastFrameT = f.t;
+      if (scaleRun && f.f0 > 0 && f.c >= 0.7 && f.db > -52) scaleRun.frames.push({ t: f.t, m: hzToMidi(f.f0) });
       const voiced = f.f0 > 0 && f.c >= 0.7 && f.db > -52;
       if (!voiced) {
         hist.push({ t: f.t, cents: null });
@@ -158,6 +238,16 @@ export async function renderPractice(main, params, state = {}) {
       }
       silentFrames = 0;
       const m = hzToMidi(f.f0);
+      if (mode === 'scale') {
+        // 音階モードは表示だけ（ロングトーンの採点はしない）
+        const cents = (m - Math.round(m)) * 100;
+        hist.push({ t: f.t, cents, m });
+        noteEl.textContent = midiName(m);
+        noteJa.textContent = midiNameJa(m);
+        centsEl.textContent = `${cents > 0 ? '+' : ''}${Math.round(cents)} セント`;
+        centsEl.style.color = devColor(Math.abs(cents));
+        continue;
+      }
       if (!cur) cur = { t0: f.t, ms: [], ts: [] };
       cur.ms.push(m);
       cur.ts.push(f.t);
@@ -254,7 +344,12 @@ export async function renderPractice(main, params, state = {}) {
   }
 
   requestAnimationFrame(draw);
-  return { cleanup: () => live && stop() };
+  return {
+    cleanup: () => {
+      eng.cancelScheduled && eng.ctx && eng.cancelScheduled();
+      if (live) stop();
+    },
+  };
 }
 
 function median(a) {

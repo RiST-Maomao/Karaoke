@@ -252,6 +252,32 @@ export class AudioEngine {
     this.toneOsc = osc;
   }
 
+  /** 決まった時刻に基準音を鳴らす（音階練習用）。when は ctx.currentTime 基準 */
+  scheduleTone(hz, when, seconds) {
+    const ctx = this.ctx;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.value = hz;
+    g.gain.setValueAtTime(0, when);
+    g.gain.linearRampToValueAtTime(0.22, when + 0.02);
+    g.gain.setValueAtTime(0.22, when + seconds - 0.06);
+    g.gain.linearRampToValueAtTime(0, when + seconds);
+    osc.connect(g).connect(ctx.destination);
+    osc.start(when);
+    osc.stop(when + seconds + 0.02);
+    (this.scheduled = this.scheduled || []).push(osc);
+  }
+
+  cancelScheduled() {
+    for (const o of this.scheduled || []) {
+      try {
+        o.stop();
+      } catch {}
+    }
+    this.scheduled = [];
+  }
+
   stopTone() {
     try {
       this.toneOsc?.stop();
