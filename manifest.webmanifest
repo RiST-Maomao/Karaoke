@@ -1,0 +1,17 @@
+{
+  "name": "ききごこち — 聞き心地で採点するカラオケ",
+  "short_name": "ききごこち",
+  "description": "歌声だけで“聞き心地”を採点し、ボイトレの先生のようにアドバイスするアプリ",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#14121a",
+  "theme_color": "#14121a",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
