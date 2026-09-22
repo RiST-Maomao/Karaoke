@@ -32,7 +32,7 @@ self.onmessage = (ev) => {
       case 'finish': {
         flushLive(true);
         if (!fa) return;
-        const report = buildReport(fa.result(), msg.ref, msg.synced);
+        const report = buildReport(fa.result(), msg.ref, msg.synced, msg.latency || 0);
         postMessage({ type: 'report', id: msg.id, report });
         fa = null;
         break;

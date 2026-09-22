@@ -38,6 +38,13 @@ export class AudioEngine {
     return this.ctx;
   }
 
+  /** 伴奏が鳴ってから、それに合わせた声が録音されるまでの遅れ（出力＋入力）の推定値 */
+  get roundTripLatency() {
+    const c = this.ctx;
+    if (!c) return 0.04;
+    return (c.outputLatency || 0.02) + (c.baseLatency || 0.01) + 0.01;
+  }
+
   get micOpen() {
     return !!this.stream;
   }
@@ -121,32 +128,59 @@ export class AudioEngine {
   }
 
   // ---------- 再生 ----------
-  playPcm(pcm, sampleRate, from = 0, to = null, onEnd = null) {
+  /**
+   * 録音を再生。withAccomp が true なら、読み込み中の伴奏も同じ位置から重ねて鳴らす。
+   * 録音はマイク入力＋出力の遅延ぶん伴奏より遅れて記録されているので、その分だけ声を前に詰める。
+   */
+  playPcm(pcm, sampleRate, from = 0, to = null, onEnd = null, withAccomp = false) {
     this.stopPlayback();
     const ctx = this.ctx;
-    const buf = ctx.createBuffer(1, pcm.length, sampleRate);
-    buf.copyToChannel(pcm, 0);
+    if (!this._pcmCache || this._pcmCache.pcm !== pcm) {
+      const b = ctx.createBuffer(1, pcm.length, sampleRate);
+      b.copyToChannel(pcm, 0);
+      this._pcmCache = { pcm, buf: b };
+    }
+    const buf = this._pcmCache.buf;
     const src = ctx.createBufferSource();
     src.buffer = buf;
     src.connect(ctx.destination);
     const dur = to != null ? Math.max(0.05, to - from) : undefined;
-    src.start(0, Math.max(0, from), dur);
+    const t0 = ctx.currentTime + 0.05;
+    if (withAccomp && this.accompBuffer) {
+      const latency = this.roundTripLatency;
+      const a = ctx.createBufferSource();
+      a.buffer = this.accompBuffer;
+      const g = ctx.createGain();
+      g.gain.value = 0.55;
+      a.connect(g).connect(ctx.destination);
+      a.start(t0, Math.max(0, from), dur);
+      this.playAccompSrc = a;
+      src.start(t0, Math.max(0, from + latency), dur);
+    } else {
+      src.start(t0, Math.max(0, from), dur);
+    }
     src.onended = () => {
       if (this.playSrc === src) this.playSrc = null;
       onEnd && onEnd();
     };
     this.playSrc = src;
-    this.playStartedAt = ctx.currentTime;
+    this.playStartedAt = t0;
     this.playFrom = Math.max(0, from);
     return src;
   }
 
   playbackPosition() {
     if (!this.playSrc) return null;
-    return this.playFrom + (this.ctx.currentTime - this.playStartedAt);
+    return this.playFrom + Math.max(0, this.ctx.currentTime - this.playStartedAt);
   }
 
   stopPlayback() {
+    if (this.playAccompSrc) {
+      try {
+        this.playAccompSrc.stop();
+      } catch {}
+      this.playAccompSrc = null;
+    }
     if (this.playSrc) {
       const s = this.playSrc;
       this.playSrc = null;

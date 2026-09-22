@@ -98,7 +98,7 @@ function dtw(U, R, shift, band, slope) {
  * user, ref: { hop, t0, pitch } と user の音符（track.notes）
  * synced: 伴奏（原曲）と同じ時間軸で歌ったかどうか
  */
-export function compareToReference(userTrack, refTrack, { synced = false } = {}) {
+export function compareToReference(userTrack, refTrack, { synced = false, latency = 0 } = {}) {
   const u = binTrack(userTrack);
   const r = binTrack(refTrack);
   const U = u.bins, R = r.bins;
@@ -180,7 +180,7 @@ export function compareToReference(userTrack, refTrack, { synced = false } = {})
       }
       if (bestJ >= 0) {
         const refT = r.t0 + bestJ * BIN;
-        lags.push({ t: nt.t, lag: nt.t - refT });
+        lags.push({ t: nt.t, lag: nt.t - refT - latency }); // 機器の遅れぶんを差し引く
       }
     }
   }

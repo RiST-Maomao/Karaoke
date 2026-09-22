@@ -42,7 +42,7 @@ export async function renderResult(main, [id]) {
     stopPlay();
     eng.playPcm(audio.pcm, audio.sampleRate, from, to, () => {
       if (playingBtn === btn) stopPlay();
-    });
+    }, withAccomp && accompBox.checked);
     playingBtn = btn;
     if (btn) btn.classList.add('playing');
     const tick = () => {
@@ -54,6 +54,9 @@ export async function renderResult(main, [id]) {
     tick();
   };
 
+  // 伴奏つき再生：この録音で使った伴奏がまだ読み込まれている場合のみ
+  const withAccomp = !!(session.accomp && eng.accompBuffer && app.accompName === session.accomp && session.source === 'mic');
+  const accompBox = h('input', { type: 'checkbox', checked: withAccomp });
   const tl = new Timeline(r, { onSeek: (t) => play(t, null, null) });
   const playAllBtn = h('button.btn.small', {
     onclick: () => {
@@ -137,6 +140,7 @@ export async function renderResult(main, [id]) {
       h('div.card',
         h('div.row', h('h2.grow', { style: { margin: 0 } }, '歌唱タイムライン'), playAllBtn),
         h('p.tiny', '線：あなたの音程 ／ 帯：検出した音符（色は音程の正確さ）／ ▼：指摘・良かった箇所'),
+        withAccomp ? h('label.row.small', { style: { marginBottom: '8px' } }, accompBox, h('span', '伴奏と一緒に再生')) : null,
         tl.el
       ),
       h('div.card',

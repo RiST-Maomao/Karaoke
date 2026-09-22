@@ -10,11 +10,11 @@ export const ANALYSIS_VERSION = 1;
  * ref: お手本 { track: { hop, t0, pitch } }（任意）
  * synced: 伴奏（原曲）と同じ時間軸で歌ったか
  */
-export function buildReport(frames, ref = null, synced = false) {
+export function buildReport(frames, ref = null, synced = false, latency = 0) {
   const metrics = analyzeFrames(frames);
   if (ref && ref.track) {
     try {
-      const cmp = compareToReference(metrics.track, ref.track, { synced });
+      const cmp = compareToReference(metrics.track, ref.track, { synced, latency });
       metrics.reference = cmp;
       if (cmp.available) {
         for (const w of cmp.wrong) metrics.events.push({ type: 'melody', t: w.t, tEnd: w.tEnd, sev: Math.abs(w.semis) >= 1.5 ? 2 : 1, value: w.semis });

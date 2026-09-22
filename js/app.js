@@ -116,7 +116,7 @@ export async function finishRecording() {
   const eng = app.engine;
   const { pcm, sampleRate } = eng.stopRecording();
   eng.stopAccompaniment();
-  const reportP = requestReport({ type: 'finish', ref: refPayload(), synced: isSynced() });
+  const reportP = requestReport({ type: 'finish', ref: refPayload(), synced: isSynced(), latency: eng.roundTripLatency });
   stopLive();
   navigate('#/analyzing', { silent: true });
   try {
