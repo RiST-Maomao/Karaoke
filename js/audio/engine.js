@@ -1,6 +1,6 @@
 // オーディオ入出力：マイク取得、ワーカーへのストリーミング、録音の保持、再生、伴奏、基準音
 
-import { concatFloat32 } from './pcm.js';
+import { concatFloat32, HalfDecimator } from './pcm.js';
 
 export class AudioEngine {
   constructor() {
@@ -63,7 +63,8 @@ export class AudioEngine {
     this.sink.gain.value = 0;
     this.sink.connect(ctx.destination);
     const deliver = (data) => {
-      if (this.recording) this.chunks.push(data);
+      // 保存・再生用の録音はメモリ節約のため 44.1k/48k → 半分のレートで持つ（解析はフル帯域のまま）
+      if (this.recording) this.chunks.push(this.decimator ? this.decimator.process(data) : data);
       if (this.onChunk) this.onChunk(data);
     };
     try {
@@ -104,6 +105,7 @@ export class AudioEngine {
 
   startRecording() {
     this.chunks = [];
+    this.decimator = this.sampleRate >= 44100 ? new HalfDecimator() : null;
     this.recording = true;
     this.recordStartTime = this.ctx.currentTime;
     this.requestWakeLock();
@@ -115,7 +117,7 @@ export class AudioEngine {
     this.releaseWakeLock();
     const pcm = concatFloat32(this.chunks);
     this.chunks = [];
-    return { pcm, sampleRate: this.sampleRate };
+    return { pcm, sampleRate: this.decimator ? this.sampleRate / 2 : this.sampleRate };
   }
 
   // ---------- 再生 ----------

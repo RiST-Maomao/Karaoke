@@ -139,7 +139,23 @@ export async function renderResult(main, [id]) {
       c.notes.length ? h('div.card', h('h2', 'メモ'), h('ul.goal-list.small', c.notes.map((n) => h('li', n)))) : null,
       h('details.card',
         h('summary', { style: { cursor: 'pointer', fontWeight: 700 } }, '詳細データ（上級者・調整用）'),
-        metricsTable(r)
+        metricsTable(r),
+        h('div', { style: { marginTop: '10px' } },
+          h('button.btn.small', {
+            onclick: async () => {
+              const round = (k, v) => (typeof v === 'number' ? Math.round(v * 1000) / 1000 : v);
+              const data = { v: r.version, total: r.total, categories: Object.fromEntries(r.categories.map((c) => [c.id, c.score])), metrics: r.metrics };
+              const text = JSON.stringify(data, round);
+              try {
+                await navigator.clipboard.writeText(text);
+                toast('計測値をコピーしました');
+              } catch {
+                prompt('以下をコピーしてください', text);
+              }
+            },
+          }, '計測値をコピー'),
+          h('span.tiny', { style: { marginLeft: '8px' } }, '採点の調整用（音声は含みません）')
+        )
       ),
       h('div.row.wrap', { style: { gap: '8px' } },
         h('button.btn.primary.grow', { onclick: () => { app.songTitle = session.title === '無題' ? '' : session.title; navigate('#/'); } }, 'もう一度歌う'),

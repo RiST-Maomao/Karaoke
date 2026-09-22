@@ -5,7 +5,7 @@ import { PitchRoll } from '../ui/pitchRoll.js';
 import { hzToMidi, midiName, midiNameJa, fmtTime } from '../analysis/music.js';
 import * as store from '../storage.js';
 
-const MAX_REC_SEC = 12 * 60;
+const MAX_REC_SEC = 10 * 60;
 
 export async function renderSing(main) {
   const eng = app.engine;
@@ -173,9 +173,21 @@ export async function renderSing(main) {
     },
   });
 
+  const intro = h('div.card', { hidden: true },
+    h('h2', 'はじめての方へ'),
+    h('ol.small', { style: { paddingLeft: '20px', margin: '0' } },
+      h('li', 'イヤホンマイクをつないで、下の「マイクを確認」でレベルチェック'),
+      h('li', '好きな曲を 1 コーラス（1 分〜）歌う。伴奏はなくても OK'),
+      h('li', '結果の「もっと良くなるポイント」と練習メニューに取り組む')
+    ),
+    h('p.tiny', { style: { margin: '8px 0 0' } }, '点数は“誰が聞いても上手い”に近いほど上がります。機械的な採点のクセを攻略する必要はありません。')
+  );
+  store.listSessions().then((l) => (intro.hidden = l.length > 0)).catch(() => {});
+
   main.append(
     h('div.fade-in',
       h('div.hero', h('div.logo', 'ききごこち'), h('p', '“聞き心地”で採点する、ボイトレ先生つきカラオケ')),
+      intro,
       h('div.card',
         h('label.field', h('span', '曲名'), titleInput, titles),
         h('div.field',
@@ -186,7 +198,14 @@ export async function renderSing(main) {
         )
       ),
       h('div.center',
-        h('button.record-btn', { onclick: () => navigate('#/record'), 'aria-label': '録音開始' },
+        h('button.record-btn', {
+          onclick: () => {
+            // iOS はタップの処理中にオーディオを起動しないと無音になるので、画面遷移の前に起動
+            app.engine.ensureContext();
+            navigate('#/record');
+          },
+          'aria-label': '録音開始',
+        },
           h('div', svgMic(), h('div', { style: { fontSize: '15px' } }, '歌う'))
         ),
         h('div.tiny', 'イヤホンマイク推奨 ・ 1 コーラス以上で精度が上がります')

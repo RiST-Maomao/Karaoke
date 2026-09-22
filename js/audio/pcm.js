@@ -1,5 +1,37 @@
 // PCM ユーティリティ
 
+/** 録音用のストリーミング 1/2 間引き（15 タップ FIR ローパス） */
+export class HalfDecimator {
+  constructor() {
+    // 半帯域フィルタ（カットオフ ≈ 0.22 fs）
+    this.h = [-0.0025, 0, 0.0125, 0, -0.0415, 0, 0.2903, 0.5, 0.2903, 0, -0.0415, 0, 0.0125, 0, -0.0025];
+    this.hist = new Float32Array(this.h.length);
+    this.pos = 0;
+    this.odd = false;
+  }
+
+  process(input) {
+    const out = new Float32Array(Math.ceil(input.length / 2) + 1);
+    let n = 0;
+    const { h, hist } = this;
+    const L = h.length;
+    for (let i = 0; i < input.length; i++) {
+      hist[this.pos] = input[i];
+      this.pos = (this.pos + 1) % L;
+      this.odd = !this.odd;
+      if (!this.odd) continue;
+      let acc = 0;
+      let p = this.pos;
+      for (let k = 0; k < L; k++) {
+        acc += h[k] * hist[p];
+        p = p + 1 === L ? 0 : p + 1;
+      }
+      out[n++] = acc;
+    }
+    return out.subarray(0, n);
+  }
+}
+
 export function concatFloat32(chunks) {
   let n = 0;
   for (const c of chunks) n += c.length;
