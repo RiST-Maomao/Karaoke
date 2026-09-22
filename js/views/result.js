@@ -246,6 +246,8 @@ function animateScore(el, target) {
     if (k < 1) requestAnimationFrame(step);
   };
   requestAnimationFrame(step);
+  // 画面が非表示で rAF が止まっていても最終値は必ず表示
+  setTimeout(() => step(start + dur), dur + 200);
 }
 
 function metricsTable(r) {

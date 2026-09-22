@@ -124,11 +124,13 @@ export class PitchRoll {
 
     // 音量（下部の帯）
     ctx.fillStyle = cssVar('--accent');
-    ctx.globalAlpha = 0.18;
-    for (const f of this.frames) {
-      const v = Math.max(0, (f.db + 60) / 60);
-      ctx.fillRect(x(f.t), h - v * 28, 2, v * 28);
-    }
+    ctx.globalAlpha = 0.15;
+    ctx.beginPath();
+    ctx.moveTo(x(this.frames[0]?.t ?? tNow), h);
+    for (const f of this.frames) ctx.lineTo(x(f.t), h - Math.max(0, (f.db + 60) / 60) * 28);
+    ctx.lineTo(x(tNow), h);
+    ctx.closePath();
+    ctx.fill();
     ctx.globalAlpha = 1;
 
     // 音程の軌跡
