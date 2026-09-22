@@ -150,7 +150,9 @@ export async function renderResult(main, [id]) {
             h('summary', `${i + 1}. ${d.name}`, h('span.pill', d.time)),
             h('ol', d.steps.map((s) => h('li', s))),
             h('div.point', d.point),
-            d.id === 'longtone' || d.id === 'attack' ? h('div', { style: { marginTop: '8px' } }, h('a.btn.small', { href: '#/practice' }, '練習モードを開く')) : null
+            ['longtone', 'attack', 'scale'].includes(d.id)
+              ? h('div', { style: { marginTop: '8px' } }, h('button.btn.small', { onclick: () => navigate('#/practice', { mode: d.id }) }, '練習モードを開く'))
+              : null
           )
         )
       ),

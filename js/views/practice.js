@@ -15,6 +15,9 @@ export async function renderPractice(main, params, state = {}) {
     target = state.target;
     useTarget = true;
     mode = state.mode || mode;
+  } else if (state && state.mode) {
+    mode = state.mode;
+    if (mode !== 'longtone') useTarget = true;
   }
   const save = () => store.setKV('practice', { target, useTarget, mode }).catch(() => {});
 
