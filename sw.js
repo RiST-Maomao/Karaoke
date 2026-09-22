@@ -1,5 +1,5 @@
 // オフライン対応：ネットワーク優先、失敗時はキャッシュ
-const CACHE = 'kikigokochi-v3';
+const CACHE = 'kikigokochi-v4';
 const ASSETS = [
   './',
   'index.html',
