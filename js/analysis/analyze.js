@@ -36,7 +36,8 @@ export function analyzeFrames(fr) {
     if (fr.f0[i] > 0 && fr.clarity[i] >= 0.5 && fr.db[i] >= dbThr) P[i] = hzToMidi(fr.f0[i]);
   }
   removeShortRuns(P, 5);
-  fixOctaveErrors(P);
+  fixOctaveErrors(P, 25); // 250ms 程度までの倍音誤り区間を、前後 0.5 秒の文脈で修正
+  fixOctaveErrors(P, 8);
   removeOutliers(P);
   removeShortRuns(P, 5);
   median3(P);
@@ -360,15 +361,19 @@ function localMedian(P, i, h) {
   return v.length ? median(v) : NaN;
 }
 
-function fixOctaveErrors(P) {
+/** 倍音（オクターブ上・12度上・2 オクターブ上）やオクターブ下への誤検出を、周囲の中央値を基準に戻す */
+function fixOctaveErrors(P, h) {
   const src = Float64Array.from(P);
   for (let i = 0; i < P.length; i++) {
     if (Number.isNaN(src[i])) continue;
-    const m = localMedian(src, i, 8);
+    const m = localMedian(src, i, h);
     const d = src[i] - m;
-    if (Math.abs(d - 12) < 1.5) P[i] = src[i] - 12;
-    else if (Math.abs(d + 12) < 1.5) P[i] = src[i] + 12;
-    else if (Math.abs(d - 19) < 1.0) P[i] = src[i] - 19; // 3倍音誤検出
+    for (const k of [12, -12, 19, 24]) {
+      if (Math.abs(d - k) < 1.3) {
+        P[i] = src[i] - k;
+        break;
+      }
+    }
   }
 }
 
@@ -614,7 +619,8 @@ function analyzeNoteDetail(nt, P, A, fr, hop) {
     const lfC = Array.from(lf).map((v) => v * 100);
     nt.wobble = detrendedStd(lfC);
     nt.driftCents = slope(lfC) * (lfC.length - 1);
-    nt.instability = Math.sqrt(nt.wobble ** 2 + (0.35 * nt.driftCents) ** 2);
+    // 解析誤りによる極端な値が平均を壊さないよう上限を設ける
+    nt.instability = Math.min(60, Math.sqrt(nt.wobble ** 2 + (0.35 * nt.driftCents) ** 2));
     const hfm = movingAverage(core, 5);
     nt.hfJitter = std(core.map((v, i) => (v - hfm[i]) * 100));
     const dbs = Array.from(fr.db.subarray(nt.s + cut, nt.e + 1 - cut));

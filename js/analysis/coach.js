@@ -566,6 +566,7 @@ export function buildCoaching(m, s) {
 
   const label = scoreLabel(s.total);
   const summary = composeSummary(m, s, strengths, topIssues, label);
+  const phrases = rankPhrases(m);
   const goals = composeGoals(m, topIssues);
 
   const range = Number.isFinite(m.range.lowest)
@@ -576,7 +577,32 @@ export function buildCoaching(m, s) {
   notes.unshift(...levelNotes(m));
   if (s.reliability < 0.6) notes.unshift('⚠ 歌っている時間が短いため、今回の評価はブレが大きい可能性があります。1 コーラス（1 分以上）歌うのがおすすめです。');
 
-  return { label, summary, strengths: strengths.slice(0, 4), issues: topIssues, menu: menu.map((id) => ({ id, ...DRILLS[id] })), goals, notes };
+  return { label, summary, strengths: strengths.slice(0, 4), issues: topIssues, menu: menu.map((id) => ({ id, ...DRILLS[id] })), goals, notes, phrases };
+}
+
+/** フレーズごとの出来を採点し、練習すべきフレーズと一番良かったフレーズを選ぶ */
+function rankPhrases(m) {
+  const tr = m.track;
+  const list = [];
+  for (const ph of tr.phrases) {
+    const dur = ph.tEnd - ph.t;
+    if (dur < 1) continue;
+    const ns = tr.notes.filter((n) => n.t >= ph.t - 0.05 && n.tEnd <= ph.tEnd + 0.05 && n.dev != null);
+    if (ns.length < 2) continue;
+    const mad = ns.reduce((a, n) => a + Math.abs(n.dev), 0) / ns.length;
+    const evs = m.events.filter((e) => e.type !== 'good' && e.t >= ph.t - 0.1 && e.t <= ph.tEnd);
+    const sev = evs.reduce((a, e) => a + (e.sev || 1), 0);
+    const score = Math.max(0, Math.min(100, 100 - 1.6 * Math.max(0, mad - 8) - (22 * sev) / Math.max(dur, 2)));
+    const counts = {};
+    for (const e of evs) counts[e.type] = (counts[e.type] || 0) + (e.sev || 1);
+    const mainType = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+    list.push({ t: ph.t, tEnd: ph.tEnd, score, mad, main: mainType ? EVENT_LABELS[mainType[0]] : null });
+  }
+  if (list.length < 3) return null;
+  const sorted = list.slice().sort((a, b) => a.score - b.score);
+  const worst = sorted.slice(0, 3).filter((p) => p.score < 92);
+  const best = sorted[sorted.length - 1];
+  return { worst, best, count: list.length };
 }
 
 /** 入力レベルに関する注意 */

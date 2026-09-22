@@ -137,6 +137,24 @@ export async function renderResult(main, [id]) {
             )
           )
         : h('div.card', h('h2', '🎯 改善ポイント'), h('p.muted', '大きな改善点は見つかりませんでした。素晴らしい！')),
+      c.phrases && (c.phrases.worst.length || c.phrases.best)
+        ? h('div.card',
+            h('h2', '🎧 フレーズ別チェック'),
+            c.phrases.worst.length
+              ? h('div',
+                  h('div.small', 'もう一度練習したいフレーズ'),
+                  h('div.ex-list', c.phrases.worst.map((p) => exBtn({ t: p.t, tEnd: p.tEnd, label: `${Math.round(p.score)}点${p.main ? `・${p.main}` : ''}` })))
+                )
+              : null,
+            c.phrases.best
+              ? h('div', { style: { marginTop: '10px' } },
+                  h('div.small', 'いちばん良かったフレーズ（お手本にしよう）'),
+                  h('div.ex-list', exBtn({ t: c.phrases.best.t, tEnd: c.phrases.best.tEnd, label: `${Math.round(c.phrases.best.score)}点・平均ズレ ${Math.round(c.phrases.best.mad)}c` }))
+                )
+              : null,
+            h('p.tiny', { style: { marginTop: '8px' } }, '良いフレーズと苦手なフレーズを聞き比べると、違いが耳でわかるようになります。')
+          )
+        : null,
       h('div.card',
         h('div.row', h('h2.grow', { style: { margin: 0 } }, '歌唱タイムライン'), playAllBtn),
         h('p.tiny', '線：あなたの音程 ／ 帯：検出した音符（色は音程の正確さ）／ ▼：指摘・良かった箇所'),
