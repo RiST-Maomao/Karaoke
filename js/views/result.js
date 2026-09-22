@@ -83,7 +83,7 @@ export async function renderResult(main, [id]) {
     h('div.fade-in',
       h('div.card.score-hero',
         h('div.song', session.title),
-        h('div.tiny', `${fmtDate(session.date)} ・ ${session.source === 'file' ? 'ファイル' : 'マイク録音'}`),
+        h('div.tiny', `${fmtDate(session.date)} ・ ${session.source === 'file' ? 'ファイル' : 'マイク録音'}${session.refName ? ' ・ お手本比較あり' : ''}`),
         scoreEl,
         h('div.score-rank', h('b', c.label.rank), h('span', c.label.text)),
         delta != null ? h('div.delta', h('span', { class: delta >= 0 ? 'up' : 'down' }, `前回（${fmtDate(prev.date)}）から ${delta >= 0 ? '+' : ''}${delta.toFixed(2)}`)) : null,
@@ -236,6 +236,14 @@ function metricsTable(r) {
     ['響き（2-4kHz 比）', f(m.tone.ring, 1, ' dB')],
     ['息・歯擦音（5kHz+）', f(m.tone.hf, 1, ' dB')],
     ['高音：明瞭度低下 / 音程 / 音量増', m.high.available ? `${f(m.high.hnrDrop, 1)}dB / ${f(m.high.signedDevHigh, 0)}c / ${f(m.high.loudJump, 1)}dB` : '—'],
+    ...(m.reference && m.reference.available
+      ? [
+          ['お手本：キー / 比較方法', `${m.reference.shift > 0 ? '+' : ''}${m.reference.shift} 半音 / ${m.reference.synced ? '同じ時間軸' : '自動整列'}`],
+          ['お手本：メロディ一致率 / カバー率', `${f(m.reference.melodyMatch * 100, 0, '%')} / ${f(m.reference.coverage * 100, 0, '%')}`],
+          ['お手本：メロディ違いの音', `${m.reference.wrong.length} 箇所`],
+          ['お手本：タイミング（平均/ばらつき）', m.reference.timing ? `${f(m.reference.timing.medianLag * 1000, 0, 'ms')} / ${f(m.reference.timing.spread * 1000, 0, 'ms')}` : '—'],
+        ]
+      : []),
     ['入力レベル（歌/ノイズ）', `${f(m.levels.singLevel, 0)} / ${f(m.levels.noiseFloor, 0)} dBFS`],
   ];
   return h('table.metrics-table', rows.map(([k, v]) => h('tr', h('td', k), h('td', v))));

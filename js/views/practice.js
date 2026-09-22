@@ -25,6 +25,7 @@ export async function renderPractice(main) {
   const canvas = h('canvas');
   const targetVal = h('div.val');
   const statDur = h('div.v', '—');
+  const statDurLabel = h('div.k', mode === 'attack' ? '到達時間' : '伸ばした時間');
   const statMean = h('div.v', '—');
   const statStab = h('div.v', '—');
   const trialList = h('div.trial-list');
@@ -47,6 +48,7 @@ export async function renderPractice(main) {
             renderTarget();
           }
           updateHelp();
+          statDurLabel.textContent = mode === 'attack' ? '到達時間' : '伸ばした時間';
           save();
         },
       }, label)
@@ -67,7 +69,7 @@ export async function renderPractice(main) {
       h('div.card.tuner',
         noteEl, noteJa, canvas, centsEl,
         h('div.stat-grid', { style: { marginTop: '8px' } },
-          h('div.stat', statDur, h('div.k', mode === 'attack' ? '到達時間' : '伸ばした時間')),
+          h('div.stat', statDur, statDurLabel),
           h('div.stat', statMean, h('div.k', '平均のズレ')),
           h('div.stat', statStab, h('div.k', '揺れ'))
         )

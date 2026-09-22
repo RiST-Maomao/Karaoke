@@ -1,7 +1,7 @@
 // IndexedDB による履歴と録音の保存（すべて端末内）
 
 const DB_NAME = 'koe-sensei';
-const DB_VER = 1;
+const DB_VER = 2;
 const MAX_AUDIO = 40; // 録音はこの件数まで保持（古いものから削除、採点結果は残る）
 
 let dbp = null;
@@ -18,6 +18,7 @@ function open() {
       }
       if (!db.objectStoreNames.contains('audio')) db.createObjectStore('audio', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv', { keyPath: 'k' });
+      if (!db.objectStoreNames.contains('refs')) db.createObjectStore('refs', { keyPath: 'title' });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -91,6 +92,24 @@ async function pruneAudio() {
   const sorted = keys.sort((a, b) => (byDate.get(a) || 0) - (byDate.get(b) || 0));
   const drop = sorted.slice(0, keys.length - MAX_AUDIO);
   await tx('audio', 'readwrite', (st) => drop.forEach((k) => st.delete(k)));
+}
+
+// ---------- お手本（曲名ごと） ----------
+export function saveRef(ref) {
+  return tx('refs', 'readwrite', (st) => st.put(ref));
+}
+
+export function getRef(title) {
+  if (!title) return Promise.resolve(null);
+  return tx('refs', 'readonly', (st) => reqP(st.get(title)));
+}
+
+export function deleteRef(title) {
+  return tx('refs', 'readwrite', (st) => st.delete(title));
+}
+
+export async function listRefTitles() {
+  return tx('refs', 'readonly', (st) => reqP(st.getAllKeys()));
 }
 
 export async function getKV(k, def = null) {

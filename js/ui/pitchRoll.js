@@ -12,6 +12,11 @@ export class PitchRoll {
     this.center = 60;
     this.running = false;
     this.latest = null;
+    this.guide = null; // お手本の音符 [{t, tEnd, center}]
+  }
+
+  setGuide(notes) {
+    this.guide = notes && notes.length ? notes : null;
   }
 
   push(frames) {
@@ -90,7 +95,32 @@ export class PitchRoll {
 
     if (!this.latest) return;
     const tNow = this.latest.t;
-    const x = (t) => w - 30 - ((tNow - t) / SPAN) * (w - 40);
+    // ガイドがある時は「今」を 65% の位置に置き、先の音符が見えるようにする
+    const nowX = this.guide ? w * 0.65 : w - 30;
+    const x = (t) => nowX - ((tNow - t) / SPAN) * (w - 40);
+
+    if (this.guide) {
+      const vis = this.guide.filter((n) => n.tEnd > tNow - SPAN && n.t < tNow + SPAN * 0.6);
+      if (vis.length) {
+        // お手本のオクターブを、今歌っている高さに寄せる
+        const gm = vis.map((n) => n.center).sort((a, b) => a - b)[vis.length >> 1];
+        const oct = 12 * Math.round((this.center - gm) / 12);
+        ctx.fillStyle = cssVar('--blue');
+        for (const n of vis) {
+          const yy = y(n.center + oct);
+          ctx.globalAlpha = n.t > tNow ? 0.45 : 0.25;
+          ctx.fillRect(x(n.t), yy - 5, Math.max(3, x(n.tEnd) - x(n.t)), 10);
+        }
+        ctx.globalAlpha = 1;
+      }
+      ctx.strokeStyle = cssVar('--text3');
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(nowX, 0);
+      ctx.lineTo(nowX, h);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
 
     // 音量（下部の帯）
     ctx.fillStyle = cssVar('--accent');

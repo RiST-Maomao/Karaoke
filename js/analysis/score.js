@@ -14,6 +14,8 @@ export const CATEGORIES = [
   { id: 'phrase', name: 'フレーズの終わり方', short: '語尾', weight: 8 },
   { id: 'vibrato', name: 'ビブラート・余韻', short: 'ビブ', weight: 8 },
   { id: 'high', name: '高音の余裕', short: '高音', weight: 6 },
+  // お手本があるときだけ評価
+  { id: 'melody', name: 'メロディ・リズム（お手本比較）', short: 'お手本', weight: 24 },
 ];
 
 export const CALIB = {
@@ -115,6 +117,9 @@ export function scoreMetrics(m) {
     ]);
   } else sub.high = NaN;
 
+  // お手本比較
+  sub.melody = m.reference && m.reference.available ? m.reference.score : NaN;
+
   // 総合：重み付きのべき平均（p = -2）。
   // 苦手な項目が 1 つでもあると聞き心地は大きく損なわれるので、低い項目ほど強く効く。
   let ws = 0, acc = 0;
@@ -130,7 +135,10 @@ export function scoreMetrics(m) {
   const reliability = clamp(Math.min(m.voicedSec / 25, m.counts.tuned / 25), 0, 1);
   total = clamp(total, 0, 100);
 
-  const categories = CATEGORIES.map((c) => ({ ...c, score: Number.isFinite(sub[c.id]) ? Math.round(sub[c.id] * 10) / 10 : null }));
+  const categories = CATEGORIES.filter((c) => c.id !== 'melody' || Number.isFinite(sub.melody)).map((c) => ({
+    ...c,
+    score: Number.isFinite(sub[c.id]) ? Math.round(sub[c.id] * 10) / 10 : null,
+  }));
   return { total: Math.round(total * 1000) / 1000, categories, reliability };
 }
 

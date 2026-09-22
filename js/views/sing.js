@@ -1,5 +1,5 @@
 // 歌うタブ：準備画面・録音画面・解析中画面
-import { app, startLive, stopLive, finishRecording, analyzeFile, navigate } from '../app.js';
+import { app, startLive, stopLive, finishRecording, analyzeFile, navigate, loadReferenceFor, registerReference, isSynced } from '../app.js';
 import { h, toast } from '../ui/dom.js';
 import { PitchRoll } from '../ui/pitchRoll.js';
 import { hzToMidi, midiName, midiNameJa, fmtTime } from '../analysis/music.js';
@@ -16,8 +16,16 @@ export async function renderSing(main) {
     placeholder: '例：糸 / ultra soul（任意）',
     value: app.songTitle,
     list: 'songTitles',
-    oninput: (e) => (app.songTitle = e.target.value),
+    oninput: (e) => {
+      app.songTitle = e.target.value;
+      clearTimeout(titleTimer);
+      titleTimer = setTimeout(async () => {
+        await loadReferenceFor(app.songTitle);
+        renderRef();
+      }, 300);
+    },
   });
+  let titleTimer = null;
   const titles = h('datalist#songTitles');
   store.listSessions().then((list) => {
     const seen = new Set();
@@ -62,9 +70,56 @@ export async function renderSing(main) {
     type: 'range', min: 0, max: 1, step: 0.05, value: app.accompVolume,
     oninput: (e) => {
       app.accompVolume = +e.target.value;
-      store.setKV('prefs', { accompVolume: app.accompVolume }).catch(() => {});
+      savePrefs();
     },
   });
+
+  // お手本ボーカル
+  const refStatus = h('div.small.grow');
+  const refProgress = h('div.progress', { hidden: true }, h('i'));
+  const refFile = h('input.hidden-file', {
+    type: 'file',
+    accept: 'audio/*,.mp3,.m4a,.wav,.aac',
+    onchange: async (e) => {
+      const f = e.target.files[0];
+      e.target.value = '';
+      if (!f) return;
+      if (!app.songTitle.trim()) {
+        app.songTitle = f.name.replace(/\.[^.]+$/, '').replace(/[ _-]?(vocals?|ボーカル|acapella|アカペラ)$/i, '');
+        titleInput.value = app.songTitle;
+      }
+      refProgress.hidden = false;
+      refStatus.textContent = 'お手本を解析中…';
+      try {
+        const ref = await registerReference(f, app.songTitle, (v) => (refProgress.firstChild.style.width = `${Math.round(v * 100)}%`));
+        toast(`お手本を登録しました（聞き心地 ${ref.total.toFixed(1)} 点）`);
+      } catch (err) {
+        toast(`お手本を登録できませんでした：${err.message || err}`, 4000);
+      }
+      refProgress.hidden = true;
+      renderRef();
+    },
+  });
+  const syncBox = h('input', { type: 'checkbox', checked: app.refSynced, onchange: (e) => ((app.refSynced = e.target.checked), savePrefs()) });
+  const refRemove = h('button.btn.small.ghost', {
+    onclick: async () => {
+      if (!app.reference || !confirm(`「${app.reference.title}」のお手本を削除しますか？`)) return;
+      await store.deleteRef(app.reference.title);
+      app.reference = null;
+      renderRef();
+    },
+  }, '削除');
+  function renderRef() {
+    const r = app.reference;
+    refRemove.hidden = !r;
+    refStatus.innerHTML = '';
+    if (r) {
+      refStatus.append(h('span.pill.good', '登録済み'), ' ', `${r.fileName}（${fmtTime(r.duration || 0)}・お手本の聞き心地 ${r.total.toFixed(1)} 点）`);
+    } else {
+      refStatus.append(h('span.muted', app.songTitle.trim() ? 'この曲のお手本は未登録です' : '未登録（曲名ごとに保存されます）'));
+    }
+  }
+  loadReferenceFor(app.songTitle).then(renderRef);
 
   // マイクチェック
   const meterFill = h('i');
@@ -142,6 +197,14 @@ export async function renderSing(main) {
         h('div', { style: { marginTop: '8px' } }, micMsg, noteView),
         h('div.tiny', { style: { marginTop: '6px' } }, 'イヤホンのマイクは口元から 3〜5cm。一番大きい声でもメーターが赤まで行かない位置がベストです。')
       ),
+      h('details.card', { open: !!app.reference },
+        h('summary', { style: { cursor: 'pointer', fontWeight: 700 } }, 'お手本ボーカル（任意・上級）'),
+        h('p.small.muted', 'プロの歌声だけの音源（原曲からボーカルを抽出したもの等）を登録すると、メロディの取り違えやリズムのズレも判定し、録音中に音程ガイドを表示します。曲名ごとに端末内に保存されます。'),
+        h('div.file-row', refStatus, refRemove, h('button.btn.small', { onclick: () => refFile.click() }, '選ぶ'), refFile),
+        refProgress,
+        h('label.row.small', { style: { marginTop: '8px' } }, syncBox, h('span', '伴奏とお手本は同じ時間軸（伴奏＝原曲、お手本＝その歌声）')),
+        h('div.tiny', '同じ時間軸なら、リズム（もたり・走り）も判定できます。キーを変えて歌っても自動で合わせます。')
+      ),
       h('div.card',
         h('h2', '録音済みの音声を採点'),
         h('p.small.muted', 'ボイスメモなどで録った歌声（アカペラ）や、プロのボーカルだけの音源を採点できます。伴奏入りの音源は正しく評価できません。'),
@@ -158,6 +221,10 @@ export async function renderSing(main) {
       if (location.hash !== '#/record') stopLive();
     },
   };
+}
+
+function savePrefs() {
+  store.setKV('prefs', { accompVolume: app.accompVolume, refSynced: app.refSynced }).catch(() => {});
 }
 
 export function micErrorText(e) {
@@ -181,6 +248,7 @@ export async function renderRecording(main) {
   const eng = app.engine;
   const canvas = h('canvas');
   const roll = new PitchRoll(canvas);
+  if (isSynced()) roll.setGuide(app.reference.track.notes);
   const timeEl = h('span.rec-time', '0:00');
   const noteEl = h('div.rec-note', '—', h('small', '声を出すと音程が表示されます'));
   const meterFill = h('i');

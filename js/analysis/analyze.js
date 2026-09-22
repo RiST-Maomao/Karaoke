@@ -236,6 +236,10 @@ export function analyzeFrames(fr) {
   for (const nt of notes) {
     if (nt.dur < 0.3) continue;
     for (let i = nt.s + 8; i <= nt.e - 6; i++) {
+      // 子音（無声区間）による音量の谷は除外：前後が途切れずに発声している所だけ見る
+      let voicedSpan = true;
+      for (let k = i; k <= Math.min(nt.e, i + 8); k++) if (Number.isNaN(P[k])) { voicedSpan = false; break; }
+      if (!voicedSpan) continue;
       const up = fr.db[i + 3] - fr.db[i];
       let dip = 0;
       if (fr.db[i] - fr.db[i + 3] >= 8) {

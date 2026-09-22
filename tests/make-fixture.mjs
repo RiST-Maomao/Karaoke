@@ -3,8 +3,11 @@ import { writeFileSync } from 'node:fs';
 import { synthSinging, demoMelody } from './synth.mjs';
 import { STYLES } from './test-score.mjs';
 const sr = 24000;
-for (const name of ['good', 'shaky']) {
-  const x = synthSinging(demoMelody(-5, 2), STYLES[name], sr, 7);
+let k = 0;
+const wrongMelody = demoMelody(-5, 2).map((n) => (n.rest ? n : { ...n, midi: n.midi + (k++ % 4 === 1 ? 2 : 0) }));
+const jobs = { pro: [demoMelody(-5, 2), STYLES.proLyrics], good: [demoMelody(-5, 2), STYLES.goodLyrics], shaky: [demoMelody(-5, 2), STYLES.shaky], wrong: [wrongMelody, STYLES.goodLyrics] };
+for (const [name, [mel, style]] of Object.entries(jobs)) {
+  const x = synthSinging(mel, style, sr, 7);
   const buf = Buffer.alloc(44 + x.length * 2);
   buf.write('RIFF', 0); buf.writeUInt32LE(36 + x.length * 2, 4); buf.write('WAVE', 8); buf.write('fmt ', 12);
   buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22); buf.writeUInt32LE(sr, 24);

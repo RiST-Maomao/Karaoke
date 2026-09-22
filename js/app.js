@@ -19,7 +19,49 @@ export const app = {
   songTitle: '',
   accompName: '',
   accompVolume: 0.7,
+  reference: null, // 現在の曲のお手本 { title, fileName, total, track }
+  refSynced: true, // 伴奏とお手本が同じ時間軸か
 };
+
+/** 伴奏とお手本を同じ時間軸で扱うか */
+export function isSynced() {
+  return !!(app.reference && app.engine.accompBuffer && app.refSynced);
+}
+
+function refPayload() {
+  return app.reference ? { track: app.reference.track } : null;
+}
+
+/** 曲名に対応するお手本を読み込む */
+export async function loadReferenceFor(title) {
+  try {
+    const ref = await store.getRef((title || '').trim());
+    app.reference = ref || null;
+  } catch {
+    app.reference = null;
+  }
+  return app.reference;
+}
+
+/** お手本ボーカルの音声ファイルを解析して、曲名に紐づけて保存 */
+export async function registerReference(file, title, onProgress) {
+  await app.engine.ensureContext();
+  const { pcm, sampleRate } = await decodeFileToMono(app.engine.ctx, file);
+  const report = await requestReport({ type: 'analyzeBuffer', data: pcm, sampleRate }, onProgress);
+  if (!report.enoughVoice) throw new Error('歌声が検出できませんでした');
+  const tr = report.track;
+  const ref = {
+    title: title.trim(),
+    fileName: file.name,
+    date: Date.now(),
+    total: report.total,
+    duration: tr.t0 + tr.pitch.length * tr.hop,
+    track: { hop: tr.hop, t0: tr.t0, pitch: tr.pitch, notes: tr.notes },
+  };
+  await store.saveRef(ref);
+  app.reference = ref;
+  return ref;
+}
 
 // ---------- ワーカー ----------
 function makeWorker() {
@@ -74,7 +116,7 @@ export async function finishRecording() {
   const eng = app.engine;
   const { pcm, sampleRate } = eng.stopRecording();
   eng.stopAccompaniment();
-  const reportP = requestReport({ type: 'finish' });
+  const reportP = requestReport({ type: 'finish', ref: refPayload(), synced: isSynced() });
   stopLive();
   navigate('#/analyzing', { silent: true });
   try {
@@ -93,7 +135,7 @@ export async function analyzeFile(file) {
   try {
     const { pcm, sampleRate } = await decodeFileToMono(app.engine.ctx, file);
     const copy = pcm.slice();
-    const report = await requestReport({ type: 'analyzeBuffer', data: copy, sampleRate }, (v) => {
+    const report = await requestReport({ type: 'analyzeBuffer', data: copy, sampleRate, ref: refPayload(), synced: false }, (v) => {
       const bar = document.querySelector('.progress > i');
       if (bar) bar.style.width = `${Math.round(v * 100)}%`;
     });
@@ -111,7 +153,10 @@ async function handleNewReport(report, pcm, sampleRate, extra) {
   }
   const id = `s${Date.now()}`;
   const title = app.songTitle.trim() || (extra.fileName ? extra.fileName.replace(/\.[^.]+$/, '') : '無題');
-  const session = { id, date: Date.now(), title, report, source: extra.source, accomp: app.accompName || null };
+  const session = {
+    id, date: Date.now(), title, report, source: extra.source, accomp: app.accompName || null,
+    refName: app.reference ? app.reference.fileName : null,
+  };
   const audio = packForStorage(pcm, sampleRate);
   try {
     await store.saveSession(session, audio);
@@ -215,6 +260,7 @@ document.addEventListener('visibilitychange', () => {
 store.requestPersistence();
 store.getKV('prefs', {}).then((p) => {
   if (p && typeof p.accompVolume === 'number') app.accompVolume = p.accompVolume;
+  if (p && typeof p.refSynced === 'boolean') app.refSynced = p.refSynced;
 });
 route();
 

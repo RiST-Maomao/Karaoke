@@ -2,6 +2,7 @@
 
 import { fmtTime, midiName, midiNameJa } from './music.js';
 import { scoreLabel } from './score.js';
+import { shiftLabel } from './compare.js';
 
 const r0 = (v) => Math.round(v);
 const r1 = (v) => Math.round(v * 10) / 10;
@@ -121,6 +122,26 @@ export const DRILLS = {
     ],
     point: '高音を「力で押す」癖があると、声が硬く音程も上がりきりません。小さく出せる高音は、大きくしても楽に響きます。',
   },
+  listenRef: {
+    name: 'お手本と聴き比べ',
+    time: '5分',
+    steps: [
+      '結果の「メロディ違い」の箇所をタップして自分の声を聞く',
+      'お手本（原曲）の同じ箇所を 3 回聴き、音の上がり下がりを指でなぞる',
+      '歌詞をつけずに「ラ」でその部分だけ歌い、音が合ったら歌詞をつける',
+    ],
+    point: '音程の“取り違え”は、声の問題ではなく「覚え方」の問題です。正しく覚え直すだけで一気に良くなります。',
+  },
+  rhythm: {
+    name: 'リズム練習（手拍子＋発声）',
+    time: '5分',
+    steps: [
+      '原曲を流しながら、2・4 拍目で手拍子',
+      '手拍子を続けたまま、歌詞を「リズムだけ」で話すように言う',
+      '最後にメロディをつけて歌う。言葉の頭を拍の頭に「置く」意識で',
+    ],
+    point: 'リズムが合うと、音程が少し甘くても上手く聞こえます。体でビートを感じるのが近道です。',
+  },
   listen: {
     name: '聞き返し',
     time: '5分',
@@ -143,6 +164,8 @@ const EVENT_LABELS = {
   strain: '高音の苦しさ',
   vibrato: 'ビブラートの癖',
   good: '良いロングトーン',
+  melody: 'メロディ違い',
+  timing: 'タイミング',
 };
 
 export function eventLabel(e) {
@@ -152,6 +175,8 @@ export function eventLabel(e) {
   if (e.type === 'scoop') return `${base}（${r0(e.value.approach * 1000)}ms かけて到達）`;
   if (e.type === 'spike') return `${base}（${e.value > 0 ? '急に大きく' : '一瞬抜ける'}）`;
   if (e.type === 'vibrato') return `${base}（${r1(e.value.rate)}回/秒・±${r0(e.value.extent)}c）`;
+  if (e.type === 'melody') return `${base}（お手本より${e.value > 0 ? '高い' : '低い'} ${Math.abs(e.value).toFixed(1)} 半音）`;
+  if (e.type === 'timing') return `${e.value > 0 ? '遅れ' : '早い'}（${r0(Math.abs(e.value) * 1000)}ms）`;
   return base;
 }
 
@@ -436,6 +461,58 @@ export function buildCoaching(m, s) {
     }
   }
 
+  // ---------- お手本比較 ----------
+  const rf = m.reference;
+  if (rf && rf.available) {
+    const melOk = rf.melodyScore >= 88;
+    if (melOk) {
+      strengths.push({
+        cat: 'melody',
+        title: 'お手本どおりのメロディ',
+        detail: `お手本と比べて ${pct(rf.melodyMatch)} の区間で同じ音程（±50 セント以内）を歌えています（${shiftLabel(rf.shift)}）。`,
+      });
+    } else {
+      issues.push({
+        cat: 'melody',
+        title: 'メロディの取り違え',
+        detail: `お手本と比べた音程の一致率は ${pct(rf.melodyMatch)}（${shiftLabel(rf.shift)}として比較）。${rf.wrong.length} 箇所で、お手本と半音以上違う音を歌っていました。`,
+        why: '声がきれいでも、メロディが違うと聞き手はすぐに「あれ？」と感じます。原曲を知っている人ほど気になるポイントです。',
+        tip: '間違えやすい箇所は、歌詞をつけずに「ラ」で音だけ確かめてから歌いましょう。',
+        drills: ['listenRef', 'interval'],
+        examples: examples(ev, ['melody'], 4),
+        loss: (100 - rf.melodyScore) * 24 * 0.65,
+      });
+    }
+    const tm = rf.timing;
+    if (tm) {
+      const late = tm.medianLag > 0.08, early = tm.medianLag < -0.08, loose = tm.spread > 0.11;
+      if (!late && !early && !loose) {
+        strengths.push({ cat: 'melody', title: 'リズムが正確', detail: `歌い出しのタイミングがお手本とほぼ一致しています（平均 ${r0(Math.abs(tm.medianLag) * 1000)}ms、ばらつき ${r0(tm.spread * 1000)}ms）。` });
+      } else {
+        issues.push({
+          cat: 'melody',
+          title: late ? 'リズムがもたる（遅れ気味）' : early ? 'リズムが走る（早め）' : 'タイミングのばらつき',
+          detail:
+            (late || early ? `歌い出しがお手本より平均 ${r0(Math.abs(tm.medianLag) * 1000)}ms ${late ? '遅れて' : '早く'}います。` : '') +
+            (loose ? `タイミングのばらつきが ${r0(tm.spread * 1000)}ms あります。` : ''),
+          why: 'リズムのズレは伴奏との“一体感”を壊し、聞き手に落ち着かない印象を与えます。',
+          tip: late
+            ? '言葉の子音を拍より少しだけ前に出すイメージで。母音が拍の頭に来るように。'
+            : early
+              ? '伴奏をよく聴いて、焦らず「置いていく」ように。ブレスの位置を決めておくと走りにくくなります。'
+              : '伴奏のドラム（特にスネア）を聴きながら、体でリズムを取って歌いましょう。',
+          drills: ['rhythm', 'listenRef'],
+          examples: examples(ev, ['timing'], 4),
+          loss: (100 - (rf.rhythmScore || 70)) * 24 * 0.35,
+        });
+      }
+    }
+    if (rf.coverage < 0.8) notes.push(`お手本が歌っている部分のうち、あなたが声を出していたのは ${pct(rf.coverage)} でした（歌詞が出てこなかった・ブレスが長い箇所がありそうです）。`);
+    notes.push(`お手本比較：${shiftLabel(rf.shift)}で歌ったと判定${rf.synced ? '（伴奏と同じ時間軸で比較）' : '（時間軸を自動で合わせて比較）'}。`);
+  } else if (rf && !rf.available) {
+    notes.push('お手本との比較ができませんでした（歌声またはお手本が短すぎる可能性があります）。');
+  }
+
   issues.sort((a, b) => b.loss - a.loss);
   const topIssues = issues.slice(0, 4);
   // 上手な人向け：改善点が少なければ、低めの項目から「さらに磨く」提案を追加
@@ -592,6 +669,10 @@ function composeGoals(m, issues) {
         break;
       case 'high':
         goals.push('いちばん高いフレーズを、喉を締めずに歌う');
+        break;
+      case 'melody':
+        if (is.title.includes('メロディ')) goals.push(`お手本とのメロディ一致率を ${pct(m.reference.melodyMatch)} → ${pct(Math.min(0.95, m.reference.melodyMatch + 0.1))} に`);
+        else goals.push('歌い出しのタイミングをお手本に合わせる（ズレ 80ms 以内）');
         break;
     }
   }

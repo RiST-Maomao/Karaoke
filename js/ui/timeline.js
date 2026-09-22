@@ -14,6 +14,8 @@ const EVENT_COLORS = {
   strain: '--bad',
   vibrato: '--blue',
   good: '--good',
+  melody: '--bad',
+  timing: '--blue',
 };
 
 export class Timeline {
@@ -67,7 +69,8 @@ export class Timeline {
         legend('--warn', 'やや外れ'),
         legend('--bad', '外れ(±28c超)'),
         legend('--accent', 'しゃくり等'),
-        legend('--blue', '語尾・ビブラート')
+        legend('--blue', '語尾・ビブラート・リズム'),
+        report.track.guide ? h('span', h('i', { style: { background: cssVar('--blue'), opacity: 0.4 } }), 'お手本の音程') : null
       )
     );
     requestAnimationFrame(() => {
@@ -163,6 +166,32 @@ export class Timeline {
       roundRect(ctx, x(n.t), yy - 4, Math.max(3, (n.tEnd - n.t) * this.pps), 8, 3);
       ctx.fill();
       ctx.globalAlpha = 1;
+    }
+    // お手本（ガイド）
+    if (tr.guide) {
+      const g = tr.guide;
+      ctx.strokeStyle = cssVar('--blue');
+      ctx.lineWidth = 5;
+      ctx.globalAlpha = 0.35;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      let gpen = false;
+      const g0 = Math.max(0, Math.floor((t0v - g.t0) / g.bin) - 1);
+      const g1 = Math.min(g.pitch.length - 1, Math.ceil((t1v - g.t0) / g.bin) + 1);
+      for (let i = g0; i <= g1; i++) {
+        const m = g.pitch[i];
+        if (Number.isNaN(m)) {
+          gpen = false;
+          continue;
+        }
+        const px = x(g.t0 + i * g.bin);
+        if (!gpen) ctx.moveTo(px, y(m));
+        else ctx.lineTo(px, y(m));
+        gpen = true;
+      }
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.lineCap = 'butt';
     }
     // 生のピッチカーブ
     ctx.strokeStyle = cssVar('--text');

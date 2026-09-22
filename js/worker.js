@@ -32,7 +32,7 @@ self.onmessage = (ev) => {
       case 'finish': {
         flushLive(true);
         if (!fa) return;
-        const report = buildReport(fa.result());
+        const report = buildReport(fa.result(), msg.ref, msg.synced);
         postMessage({ type: 'report', id: msg.id, report });
         fa = null;
         break;
@@ -45,7 +45,7 @@ self.onmessage = (ev) => {
           a.push(data.subarray(i, Math.min(data.length, i + step)));
           postMessage({ type: 'progress', id: msg.id, value: Math.min(1, (i + step) / data.length) });
         }
-        const report = buildReport(a.result());
+        const report = buildReport(a.result(), msg.ref, msg.synced);
         postMessage({ type: 'report', id: msg.id, report });
         break;
       }

@@ -1,5 +1,5 @@
 // オフライン対応：ネットワーク優先、失敗時はキャッシュ
-const CACHE = 'kikigokochi-v1';
+const CACHE = 'kikigokochi-v2';
 const ASSETS = [
   './',
   'index.html',
@@ -19,6 +19,7 @@ const ASSETS = [
   'js/dsp/frameAnalyzer.js',
   'js/analysis/analyze.js',
   'js/analysis/coach.js',
+  'js/analysis/compare.js',
   'js/analysis/music.js',
   'js/analysis/report.js',
   'js/analysis/score.js',

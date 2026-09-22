@@ -52,5 +52,13 @@ for (const name of ['scoops', 'flat', 'offkey']) {
   check(c.menu.length >= 2, `${name}: 練習メニューがある`);
 }
 
+// 4. お手本比較
+const { cases } = await import('./test-compare.mjs');
+const cmp = Object.fromEntries(cases());
+check(cmp['同期・1oct下・正しい'].shift === -12 && cmp['同期・1oct下・正しい'].melodyScore >= 95, 'お手本：1 オクターブ下でも正しいメロディと判定');
+check(cmp['同期・メロディ違い'].wrong.length >= 6 && cmp['同期・メロディ違い'].melodyScore < 75, `お手本：メロディ違いを検出 (${cmp['同期・メロディ違い'].wrong.length} 箇所)`);
+check(cmp['非同期・遅い・+3キー'].shift === 3 && cmp['非同期・遅い・+3キー'].melodyScore >= 95, 'お手本：テンポ・キー違いを自動整列');
+check(cmp['同期・リズム乱れ'].rhythmScore < 85 && cmp['同期・1oct下・正しい'].rhythmScore >= 95, 'お手本：リズムの乱れを検出');
+
 console.log(fails ? `\n${fails} 件失敗` : '\nすべて成功');
 process.exit(fails ? 1 : 0);
