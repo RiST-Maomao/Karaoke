@@ -8,7 +8,8 @@ import { toBackupJSON, fromBackupJSON, shareOrDownload } from '../ui/share.js';
 import { toast } from '../ui/dom.js';
 
 export async function renderHistory(main) {
-  const list = await store.listSessions();
+  const all = await store.listSessions();
+  const list = all.filter((s) => !s.insufficient); // 判定できなかった記録は統計から除外
   if (!list.length) {
     main.append(
       h('div.card.center.fade-in',
@@ -77,13 +78,13 @@ export async function renderHistory(main) {
       growth ? h('div.card', h('h2', '伸びている項目'), h('p.small', growth)) : null,
       h('div.card',
         h('h2', '記録'),
-        list.map((s) =>
+        all.map((s) =>
           h('div.hist-item', { onclick: () => navigate(`#/result/${s.id}`) },
             h('div.grow',
               h('div.hist-title', s.title),
               h('div.tiny', `${fmtDate(s.date)}${s.source === 'file' ? ' ・ ファイル' : ''}`)
             ),
-            h('div.hist-score', { style: { color: scoreColor(s.total) } }, s.total.toFixed(2))
+            h('div.hist-score', { style: { color: s.insufficient ? '' : scoreColor(s.total) } }, s.insufficient ? '—' : s.total.toFixed(2))
           )
         )
       ),

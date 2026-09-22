@@ -73,6 +73,7 @@ export async function listSessions() {
     .map(({ report, ...rest }) => ({
       ...rest,
       total: report.total,
+      insufficient: !!report.insufficient,
       categories: report.categories.map((c) => ({ id: c.id, short: c.short, score: c.score })),
       metrics: report.metrics,
     }))

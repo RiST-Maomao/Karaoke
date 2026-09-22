@@ -43,6 +43,7 @@ export function buildReport(frames, ref = null, synced = false) {
     metrics: rawMetrics,
     events,
     track,
-    enoughVoice: metrics.voicedSec >= 5 && metrics.counts.notes >= 5,
+    enoughVoice: !score.insufficient,
+    insufficient: !!score.insufficient,
   };
 }

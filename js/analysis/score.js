@@ -64,6 +64,15 @@ function avgDefined(parts) {
 export function scoreMetrics(m) {
   const C = CALIB;
   const sub = {};
+  // 歌声がほとんど無いときは採点しない
+  if (m.voicedSec < 4 || m.counts.tuned < 5) {
+    return {
+      total: 0,
+      insufficient: true,
+      reliability: 0,
+      categories: CATEGORIES.filter((c) => c.id !== 'melody').map((c) => ({ ...c, score: null })),
+    };
+  }
 
   // 音程
   sub.pitch = avgDefined([
@@ -139,7 +148,7 @@ export function scoreMetrics(m) {
     ...c,
     score: Number.isFinite(sub[c.id]) ? Math.round(sub[c.id] * 10) / 10 : null,
   }));
-  return { total: Math.round(total * 1000) / 1000, categories, reliability };
+  return { total: Math.round(total * 1000) / 1000, categories, reliability, insufficient: false };
 }
 
 function scoreVibrato(v) {

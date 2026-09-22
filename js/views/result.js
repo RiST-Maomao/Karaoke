@@ -19,7 +19,7 @@ export async function renderResult(main, [id]) {
 
   // 前回（同じ曲があれば同じ曲、なければ直前の記録）
   const all = await store.listSessions();
-  const older = all.filter((s) => s.date < session.date);
+  const older = all.filter((s) => s.date < session.date && !s.insufficient);
   const prev = older.find((s) => s.title === session.title && session.title !== '無題') || null;
 
   // ---------- 再生 ----------
@@ -75,6 +75,21 @@ export async function renderResult(main, [id]) {
 
   // ---------- スコア ----------
   const scoreEl = h('div.score-num', '0', h('small', '.000'));
+  if (r.insufficient) {
+    main.append(
+      h('div.fade-in',
+        h('div.card.score-hero', h('div.song', session.title), h('div.score-num', '—'), h('div.score-rank', h('span', '判定できませんでした'))),
+        h('div.card', h('div.teacher', h('div.avatar', '🎤'), h('div.bubble', c.summary))),
+        c.notes.length ? h('div.card', h('ul.goal-list.small', c.notes.map((n) => h('li', n)))) : null,
+        h('div.row.wrap', { style: { gap: '8px' } },
+          h('button.btn.primary.grow', { onclick: () => navigate('#/') }, 'もう一度歌う'),
+          h('button.btn', { onclick: () => downloadAudio(id, session.title) }, '録音を保存'),
+          h('button.btn.danger', { onclick: async () => { await store.deleteSession(id); navigate('#/history'); } }, '削除')
+        )
+      )
+    );
+    return null;
+  }
   const delta = prev ? r.total - prev.total : null;
 
   const radar = h('canvas');

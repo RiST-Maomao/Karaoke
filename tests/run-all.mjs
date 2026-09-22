@@ -60,5 +60,15 @@ check(cmp['同期・メロディ違い'].wrong.length >= 6 && cmp['同期・メ�
 check(cmp['非同期・遅い・+3キー'].shift === 3 && cmp['非同期・遅い・+3キー'].melodyScore >= 95, 'お手本：テンポ・キー違いを自動整列');
 check(cmp['同期・リズム乱れ'].rhythmScore < 85 && cmp['同期・1oct下・正しい'].rhythmScore >= 95, 'お手本：リズムの乱れを検出');
 
+// 5. 端のケース（無音・雑音・短すぎる歌で落ちない／満点にならない）
+const { execFileSync } = await import('node:child_process');
+const { fileURLToPath } = await import('node:url');
+try {
+  execFileSync(process.execPath, [fileURLToPath(new URL('./test-edge.mjs', import.meta.url))], { stdio: 'pipe' });
+  check(true, '端のケース（無音・雑音・短い歌・クリップ）');
+} catch (e) {
+  check(false, `端のケース\n${e.stdout}`);
+}
+
 console.log(fails ? `\n${fails} 件失敗` : '\nすべて成功');
 process.exit(fails ? 1 : 0);

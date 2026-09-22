@@ -195,6 +195,17 @@ function examples(events, types, n = 3) {
  * 戻り値: { label, summary, strengths[], issues[], menu[], goals[], notes[] }
  */
 export function buildCoaching(m, s) {
+  if (s.insufficient) {
+    return {
+      label: { rank: '—', text: '判定できませんでした' },
+      summary: '歌声がほとんど検出できませんでした。マイクが口元にあるか、入力レベル（マイクチェック）を確認して、1 フレーズ以上歌ってからもう一度試してみてください。',
+      strengths: [],
+      issues: [],
+      menu: [],
+      goals: [],
+      notes: levelNotes(m),
+    };
+  }
   const cat = Object.fromEntries(s.categories.map((c) => [c.id, c]));
   const sc = (id) => cat[id]?.score;
   const issues = [];
@@ -551,9 +562,20 @@ export function buildCoaching(m, s) {
     : null;
   if (range) notes.unshift(range);
   if (m.key.name && m.key.name !== '判定不能') notes.unshift(`推定キー：${m.key.name}${m.key.modulations ? `（途中で転調あり）` : ''}`);
+  notes.unshift(...levelNotes(m));
   if (s.reliability < 0.6) notes.unshift('⚠ 歌っている時間が短いため、今回の評価はブレが大きい可能性があります。1 コーラス（1 分以上）歌うのがおすすめです。');
 
   return { label, summary, strengths: strengths.slice(0, 4), issues: topIssues, menu: menu.map((id) => ({ id, ...DRILLS[id] })), goals, notes };
+}
+
+/** 入力レベルに関する注意 */
+function levelNotes(m) {
+  const out = [];
+  const lv = m.levels && m.levels.singLevel;
+  if (Number.isFinite(lv) && lv > -4) out.push('⚠ 入力が大きすぎて音が割れている可能性があります。マイクを口から少し離すと、声質の判定が正確になります。');
+  else if (Number.isFinite(lv) && lv < -48) out.push('⚠ 入力がかなり小さめです。マイクを口元に近づけると、より正確に判定できます。');
+  if (m.levels && Number.isFinite(m.levels.noiseFloor) && Number.isFinite(lv) && lv - m.levels.noiseFloor < 20) out.push('⚠ 周りの雑音が大きめです。静かな場所で歌うと判定が安定します。');
+  return out;
 }
 
 // 上手な人向けの「さらに磨く」提案
