@@ -105,5 +105,9 @@ export async function decodeFileToMono(ctx, file) {
     const d = buf.getChannelData(c);
     for (let i = 0; i < n; i++) out[i] += d[i] / buf.numberOfChannels;
   }
+  // 44.1k/48k は半分のレートにしてメモリを節約（解析は 16kHz で行うので影響なし）
+  if (buf.sampleRate >= 44100) {
+    return { pcm: new HalfDecimator().process(out).slice(), sampleRate: buf.sampleRate / 2 };
+  }
   return { pcm: out, sampleRate: buf.sampleRate };
 }
