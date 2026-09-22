@@ -82,7 +82,7 @@ export function synthSinging(notes, style = {}, sr = 48000, seed = 1) {
     }
     const nextRest = !notes[ni + 1] || notes[ni + 1].rest;
     // 歌詞：母音を変え、一部の音の頭に子音（無声の摩擦音＋短い無音）を入れる
-    const vowel = s.lyrics ? 'aiueo'[Math.floor(rnd() * 5)] : 'a';
+    const vowel = s.vowelFixed || (s.lyrics ? 'aiueo'[Math.floor(rnd() * 5)] : 'a');
     const consonant = s.lyrics && rnd() < 0.5 ? 0.03 + rnd() * 0.05 : 0;
     const errCents = s.detune * gauss() + s.bias + (s.drift * (t0 / total));
     const target = note.midi + errCents / 100;

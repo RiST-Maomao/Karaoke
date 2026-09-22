@@ -4,6 +4,8 @@ import { drawLineChart } from '../ui/charts.js';
 import { CATEGORIES } from '../analysis/score.js';
 import { navigate } from '../app.js';
 import * as store from '../storage.js';
+import { toBackupJSON, fromBackupJSON, shareOrDownload } from '../ui/share.js';
+import { toast } from '../ui/dom.js';
 
 export async function renderHistory(main) {
   const list = await store.listSessions();
@@ -13,7 +15,8 @@ export async function renderHistory(main) {
         h('h2', 'まだ記録がありません'),
         h('p.muted.small', '歌って採点すると、ここに成長の記録がたまっていきます。'),
         h('a.btn.primary', { href: '#/' }, '歌ってみる')
-      )
+      ),
+      backupCard()
     );
     return null;
   }
@@ -67,7 +70,8 @@ export async function renderHistory(main) {
           h('div.stat', h('div.v', list.length), h('div.k', '記録数')),
           h('div.stat', h('div.v', best.toFixed(1)), h('div.k', 'ベスト')),
           h('div.stat', h('div.v', avgRecent.toFixed(1)), h('div.k', '直近 5 回の平均'))
-        )
+        ),
+        streakLine(list)
       ),
       h('div.card', h('h2', '成長グラフ'), metricSeg, songSel, canvas, h('div.tiny', '点線：直近 5 回の移動平均')),
       growth ? h('div.card', h('h2', '伸びている項目'), h('p.small', growth)) : null,
@@ -82,12 +86,81 @@ export async function renderHistory(main) {
             h('div.hist-score', { style: { color: scoreColor(s.total) } }, s.total.toFixed(2))
           )
         )
-      )
+      ),
+      backupCard()
     )
   );
   requestAnimationFrame(draw);
   window.addEventListener('resize', draw);
   return { cleanup: () => window.removeEventListener('resize', draw) };
+}
+
+/** 連続で歌った日数 */
+function streakLine(list) {
+  const day = (ts) => {
+    const d = new Date(ts);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  };
+  const days = new Set(list.map((s) => day(s.date)));
+  const today = day(Date.now());
+  const DAY = 86400000;
+  let cur = days.has(today) ? today : today - DAY;
+  let streak = 0;
+  while (days.has(cur)) {
+    streak++;
+    cur -= DAY;
+  }
+  const week = [...days].filter((d) => d > today - 7 * DAY).length;
+  const msg = streak >= 2 ? `🔥 ${streak} 日連続で歌っています！` : days.has(today) ? '今日も歌いました 👏' : '今日はまだ歌っていません';
+  return h('div.small.center', { style: { marginTop: '10px' } }, `${msg}（この 7 日間で ${week} 日）`);
+}
+
+function backupCard() {
+  const input = h('input.hidden-file', {
+    type: 'file',
+    accept: 'application/json,.json',
+    onchange: async (e) => {
+      const f = e.target.files[0];
+      e.target.value = '';
+      if (!f) return;
+      try {
+        const data = fromBackupJSON(await f.text());
+        if (!data || data.app !== 'kikigokochi') throw new Error('format');
+        let n = 0;
+        for (const s of data.sessions || []) {
+          if (!(await store.getSession(s.id))) {
+            await store.saveSession(s, null);
+            n++;
+          }
+        }
+        for (const r of data.refs || []) await store.saveRef(r);
+        toast(`${n} 件の記録を読み込みました`);
+        navigate('#/history');
+      } catch {
+        toast('バックアップファイルを読み込めませんでした');
+      }
+    },
+  });
+  return h('details.card',
+    h('summary', { style: { cursor: 'pointer', fontWeight: 700 } }, 'データのバックアップ'),
+    h('p.small.muted', '記録は端末内（ブラウザ）に保存されています。ホーム画面に追加して使うと消えにくくなりますが、機種変更などに備えて時々バックアップしておくと安心です（録音の音声は含みません）。'),
+    h('div.row.wrap',
+      h('button.btn.small', {
+        onclick: async () => {
+          const ids = (await store.listSessions()).map((s) => s.id);
+          const sessions = [];
+          for (const id of ids) sessions.push(await store.getSession(id));
+          const refs = [];
+          for (const t of await store.listRefTitles()) refs.push(await store.getRef(t));
+          const json = toBackupJSON({ app: 'kikigokochi', version: 1, exported: Date.now(), sessions, refs });
+          const d = new Date();
+          await shareOrDownload(new File([json], `kikigokochi-backup-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.json`, { type: 'application/json' }));
+        },
+      }, '書き出す'),
+      h('button.btn.small', { onclick: () => input.click() }, '読み込む'),
+      input
+    )
+  );
 }
 
 function computeGrowth(list) {

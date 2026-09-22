@@ -3,8 +3,9 @@ import { app, loadAudio, downloadAudio, navigate } from '../app.js';
 import { h, toast, scoreColor, fmtDate } from '../ui/dom.js';
 import { drawRadar } from '../ui/charts.js';
 import { Timeline } from '../ui/timeline.js';
-import { fmtTime } from '../analysis/music.js';
+import { fmtTime, midiName } from '../analysis/music.js';
 import * as store from '../storage.js';
+import { makeShareImage, shareOrDownload } from '../ui/share.js';
 
 export async function renderResult(main, [id]) {
   const session = await store.getSession(id);
@@ -112,7 +113,8 @@ export async function renderResult(main, [id]) {
                 h('p', is.detail),
                 h('p.why', is.why),
                 h('p.tip', h('b', 'コツ：'), is.tip),
-                is.examples.length ? h('div', h('div.tiny', '気になった箇所（タップで再生）'), h('div.ex-list', is.examples.map(exBtn))) : null
+                is.examples.length ? h('div', h('div.tiny', '気になった箇所（タップで再生）'), h('div.ex-list', is.examples.map(exBtn))) : null,
+                practiceLink(r, is)
               )
             )
           )
@@ -141,6 +143,15 @@ export async function renderResult(main, [id]) {
       ),
       h('div.row.wrap', { style: { gap: '8px' } },
         h('button.btn.primary.grow', { onclick: () => { app.songTitle = session.title === '無題' ? '' : session.title; navigate('#/'); } }, 'もう一度歌う'),
+        h('button.btn', {
+          onclick: async () => {
+            try {
+              await shareOrDownload(await makeShareImage(session));
+            } catch {
+              toast('画像を作れませんでした');
+            }
+          },
+        }, '画像でシェア'),
         h('button.btn', { onclick: () => downloadAudio(id, session.title) }, '録音を保存'),
         h('button.btn.danger', {
           onclick: async () => {
@@ -167,6 +178,32 @@ export async function renderResult(main, [id]) {
       window.removeEventListener('resize', onResize);
     },
   };
+}
+
+/** 指摘箇所の音を目標にして練習モードを開くボタン */
+function practiceLink(r, is) {
+  const ex = is.examples.find((e) => ['pitch', 'wobble', 'scoop', 'melody', 'strain', 'glide'].includes(e.type));
+  if (!ex) return null;
+  const tr = r.track;
+  let target = null;
+  if (ex.type === 'melody' && tr.guide) {
+    // お手本の音程（あなたのキーに合わせたもの）
+    const v = [];
+    for (let i = Math.floor((ex.t - tr.guide.t0) / tr.guide.bin); i <= Math.ceil((ex.tEnd - tr.guide.t0) / tr.guide.bin); i++) {
+      const p = tr.guide.pitch[i];
+      if (p != null && !Number.isNaN(p)) v.push(p);
+    }
+    if (v.length) target = Math.round(v.sort((a, b) => a - b)[v.length >> 1]);
+  }
+  if (target == null) {
+    const n = tr.notes.find((x) => x.tEnd >= ex.t && x.t <= ex.tEnd) || tr.notes.find((x) => x.t >= ex.t);
+    if (n) target = Math.round(n.center - (n.dev || 0) / 100);
+  }
+  if (target == null) return null;
+  const mode = ex.type === 'scoop' || ex.type === 'glide' ? 'attack' : 'longtone';
+  return h('div', { style: { marginTop: '8px' } },
+    h('button.btn.small', { onclick: () => navigate('#/practice', { target, mode }) },
+      `🎯 この音（${midiName(target)}）を${mode === 'attack' ? '入りの' : 'ロングトーン'}練習`));
 }
 
 function catItem(ct, prev) {

@@ -1,5 +1,5 @@
 // オフライン対応：ネットワーク優先、失敗時はキャッシュ
-const CACHE = 'kikigokochi-v2';
+const CACHE = 'kikigokochi-v3';
 const ASSETS = [
   './',
   'index.html',
@@ -28,6 +28,7 @@ const ASSETS = [
   'js/ui/charts.js',
   'js/ui/pitchRoll.js',
   'js/ui/timeline.js',
+  'js/ui/share.js',
   'js/views/sing.js',
   'js/views/result.js',
   'js/views/history.js',

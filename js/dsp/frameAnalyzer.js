@@ -11,7 +11,7 @@ export const WIN = 1024; // 64ms
 const FFT_N = 2048;
 const MIN_F0 = 70;
 const MAX_F0 = 1100;
-const MPM_K = 0.9;
+const MPM_K = 0.93; // 0.9 だと第2倍音が強い母音（「え」「お」）でオクターブ上に誤りやすい
 
 /** 窓付き sinc のローパス FIR */
 function designLowpass(cutoffNorm, taps) {
@@ -234,7 +234,8 @@ export class FrameAnalyzer {
     if (!peaks.length) return { f0: 0, clarity: 0 };
     let maxVal = 0;
     for (const p of peaks) if (nsdf[p] > maxVal) maxVal = nsdf[p];
-    const thr = MPM_K * maxVal;
+    // 明瞭な音では厳しめ（オクターブ上の誤りを防ぐ）、雑音が多い時は緩め（オクターブ下の誤りを防ぐ）
+    const thr = (maxVal > 0.9 ? MPM_K : 0.85) * maxVal;
     let chosen = peaks[0];
     for (const p of peaks) {
       if (nsdf[p] >= thr) {

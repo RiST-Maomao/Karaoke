@@ -6,15 +6,24 @@ import { fitCanvas, cssVar } from './dom.js';
 export function drawRadar(canvas, categories, compare = null) {
   const { ctx, w, h } = fitCanvas(canvas);
   ctx.clearRect(0, 0, w, h);
-  const cx = w / 2;
-  const cy = h / 2 + 4;
-  const R = Math.min(w, h) / 2 - 34;
+  drawRadarOn(ctx, w / 2, h / 2 + 4, Math.min(w, h) / 2 - 34, categories, {
+    text: cssVar('--text'),
+    sub: cssVar('--text2'),
+    line: cssVar('--line'),
+    accent: cssVar('--accent'),
+    muted: cssVar('--text3'),
+  }, compare);
+}
+
+/** 任意のコンテキストにレーダーを描く（シェア画像でも使用） */
+export function drawRadarOn(ctx, cx, cy, R, categories, colors, compare = null) {
   const n = categories.length;
+  const fs = colors.fontScale || 1;
   const ang = (i) => -Math.PI / 2 + (i * 2 * Math.PI) / n;
   const pt = (i, v) => [cx + Math.cos(ang(i)) * R * (v / 100), cy + Math.sin(ang(i)) * R * (v / 100)];
 
-  ctx.strokeStyle = cssVar('--line');
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = colors.line;
+  ctx.lineWidth = fs;
   for (const lv of [25, 50, 75, 100]) {
     ctx.beginPath();
     for (let i = 0; i <= n; i++) {
@@ -44,31 +53,29 @@ export function drawRadar(canvas, categories, compare = null) {
       ctx.fill();
     }
     ctx.strokeStyle = stroke;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2 * fs;
     ctx.stroke();
     ctx.setLineDash([]);
   };
-  if (compare) poly(compare.map((c) => c.score ?? 0), null, cssVar('--text3'), [4, 4]);
-  const accent = cssVar('--accent');
-  ctx.globalAlpha = 1;
-  poly(
-    categories.map((c) => c.score ?? 0),
-    hexA(accent, 0.25),
-    accent
-  );
+  if (compare) {
+    const byId = Object.fromEntries(compare.map((c) => [c.id, c.score]));
+    poly(categories.map((c) => byId[c.id] ?? 0), null, colors.muted || colors.sub, [4 * fs, 4 * fs]);
+  }
+  poly(categories.map((c) => c.score ?? 0), hexA(colors.accent, 0.25), colors.accent);
 
-  ctx.font = '600 12px -apple-system, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   for (let i = 0; i < n; i++) {
-    const [x, y] = [cx + Math.cos(ang(i)) * (R + 20), cy + Math.sin(ang(i)) * (R + 18)];
-    ctx.fillStyle = cssVar('--text2');
-    ctx.fillText(categories[i].short, x, y - 6);
-    ctx.fillStyle = cssVar('--text');
-    ctx.font = '700 12px -apple-system, sans-serif';
-    ctx.fillText(categories[i].score == null ? '-' : Math.round(categories[i].score), x, y + 8);
-    ctx.font = '600 12px -apple-system, sans-serif';
+    const x = cx + Math.cos(ang(i)) * (R + 20 * fs);
+    const y = cy + Math.sin(ang(i)) * (R + 18 * fs);
+    ctx.fillStyle = colors.sub;
+    ctx.font = `600 ${12 * fs}px -apple-system, sans-serif`;
+    ctx.fillText(categories[i].short, x, y - 6 * fs);
+    ctx.fillStyle = colors.text;
+    ctx.font = `700 ${12 * fs}px -apple-system, sans-serif`;
+    ctx.fillText(categories[i].score == null ? '-' : Math.round(categories[i].score), x, y + 8 * fs);
   }
+  ctx.textBaseline = 'alphabetic';
 }
 
 /** points: [{x: 番号, y: 値, label}] */

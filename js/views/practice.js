@@ -6,10 +6,16 @@ import { pl, std, mean } from '../analysis/stats.js';
 import { micErrorText } from './sing.js';
 import * as store from '../storage.js';
 
-export async function renderPractice(main) {
+export async function renderPractice(main, params, state = {}) {
   const eng = app.engine;
   const prefs = (await store.getKV('practice', null)) || { target: 57, useTarget: false, mode: 'longtone' };
   let { target, useTarget, mode } = prefs;
+  // 結果画面から「この音を練習」で来た場合
+  if (state && Number.isFinite(state.target)) {
+    target = state.target;
+    useTarget = true;
+    mode = state.mode || mode;
+  }
   const save = () => store.setKV('practice', { target, useTarget, mode }).catch(() => {});
 
   let live = false;
