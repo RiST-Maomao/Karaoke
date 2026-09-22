@@ -4,7 +4,8 @@ import { scoreMetrics } from './score.js';
 import { buildCoaching } from './coach.js';
 import { compareToReference } from './compare.js';
 
-export const ANALYSIS_VERSION = 1;
+// 採点ロジックを変えたら上げる（古い記録に「再解析」を促す）
+export const ANALYSIS_VERSION = 2;
 
 /**
  * ref: お手本 { track: { hop, t0, pitch } }（任意）

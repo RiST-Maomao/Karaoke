@@ -168,6 +168,25 @@ async function handleNewReport(report, pcm, sampleRate, extra) {
   navigate(`#/result/${id}`);
 }
 
+/** 保存済みの録音を最新の採点方式で解析し直す */
+export async function reanalyze(id) {
+  const session = await store.getSession(id);
+  const audio = await loadAudio(id);
+  if (!session || !audio) throw new Error('録音データが残っていません');
+  const ref = await store.getRef(session.title);
+  const synced = !!(ref && session.accomp && session.source === 'mic');
+  const report = await requestReport({
+    type: 'analyzeBuffer',
+    data: audio.pcm.slice(),
+    sampleRate: audio.sampleRate,
+    ref: ref ? { track: ref.track } : null,
+    synced,
+    latency: synced ? 0.04 : 0,
+  });
+  await store.updateSession(id, { report, reanalyzedAt: Date.now() });
+  return report;
+}
+
 /** 保存済み録音の Float32 を取得（直前の録音はメモリから） */
 export async function loadAudio(id) {
   if (app.lastAudio && app.lastAudio.id === id) return { pcm: app.lastAudio.pcm, sampleRate: app.lastAudio.sampleRate };

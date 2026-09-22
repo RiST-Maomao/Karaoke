@@ -1,7 +1,7 @@
 // IndexedDB による履歴と録音の保存（すべて端末内）
 
 const DB_NAME = 'koe-sensei';
-const DB_VER = 2;
+const DB_VER = 3;
 const MAX_AUDIO = 40; // 録音はこの件数まで保持（古いものから削除、採点結果は残る）
 
 let dbp = null;
@@ -10,7 +10,7 @@ function open() {
   if (dbp) return dbp;
   dbp = new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VER);
-    req.onupgradeneeded = () => {
+    req.onupgradeneeded = (ev) => {
       const db = req.result;
       if (!db.objectStoreNames.contains('sessions')) {
         const s = db.createObjectStore('sessions', { keyPath: 'id' });
@@ -19,6 +19,19 @@ function open() {
       if (!db.objectStoreNames.contains('audio')) db.createObjectStore('audio', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv', { keyPath: 'k' });
       if (!db.objectStoreNames.contains('refs')) db.createObjectStore('refs', { keyPath: 'title' });
+      // v3: 一覧表示用の軽い要約（重い解析データを読まずに済むように）
+      if (!db.objectStoreNames.contains('summaries')) {
+        const sum = db.createObjectStore('summaries', { keyPath: 'id' });
+        if (ev.oldVersion > 0 && db.objectStoreNames.contains('sessions')) {
+          const cur = req.transaction.objectStore('sessions').openCursor();
+          cur.onsuccess = () => {
+            const c = cur.result;
+            if (!c) return;
+            sum.put(summarize(c.value));
+            c.continue();
+          };
+        }
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -43,8 +56,20 @@ function tx(store, mode, fn) {
 
 const reqP = (r) => new Promise((res, rej) => ((r.onsuccess = () => res(r.result)), (r.onerror = () => rej(r.error))));
 
+/** 一覧用の要約 */
+function summarize(session) {
+  const { report, ...rest } = session;
+  return {
+    ...rest,
+    total: report.total,
+    insufficient: !!report.insufficient,
+    categories: report.categories.map((c) => ({ id: c.id, short: c.short, score: c.score })),
+  };
+}
+
 export async function saveSession(session, audio) {
   await tx('sessions', 'readwrite', (st) => st.put(session));
+  await tx('summaries', 'readwrite', (st) => st.put(summarize(session)));
   if (audio) {
     await tx('audio', 'readwrite', (st) => st.put({ id: session.id, ...audio }));
     await pruneAudio();
@@ -56,6 +81,7 @@ export async function updateSession(id, patch) {
   if (!s) return;
   Object.assign(s, patch);
   await tx('sessions', 'readwrite', (st) => st.put(s));
+  await tx('summaries', 'readwrite', (st) => st.put(summarize(s)));
 }
 
 export function getSession(id) {
@@ -66,29 +92,22 @@ export function getAudio(id) {
   return tx('audio', 'readonly', (st) => reqP(st.get(id)));
 }
 
-/** 一覧用（重いトラックデータは除いて返す） */
+/** 一覧用（要約のみ、新しい順） */
 export async function listSessions() {
-  const all = await tx('sessions', 'readonly', (st) => reqP(st.getAll()));
-  return all
-    .map(({ report, ...rest }) => ({
-      ...rest,
-      total: report.total,
-      insufficient: !!report.insufficient,
-      categories: report.categories.map((c) => ({ id: c.id, short: c.short, score: c.score })),
-      metrics: report.metrics,
-    }))
-    .sort((a, b) => b.date - a.date);
+  const all = await tx('summaries', 'readonly', (st) => reqP(st.getAll()));
+  return all.sort((a, b) => b.date - a.date);
 }
 
 export async function deleteSession(id) {
   await tx('sessions', 'readwrite', (st) => st.delete(id));
+  await tx('summaries', 'readwrite', (st) => st.delete(id));
   await tx('audio', 'readwrite', (st) => st.delete(id));
 }
 
 async function pruneAudio() {
   const keys = await tx('audio', 'readonly', (st) => reqP(st.getAllKeys()));
   if (keys.length <= MAX_AUDIO) return;
-  const sessions = await tx('sessions', 'readonly', (st) => reqP(st.getAll()));
+  const sessions = await tx('summaries', 'readonly', (st) => reqP(st.getAll()));
   const byDate = new Map(sessions.map((s) => [s.id, s.date]));
   const sorted = keys.sort((a, b) => (byDate.get(a) || 0) - (byDate.get(b) || 0));
   const drop = sorted.slice(0, keys.length - MAX_AUDIO);

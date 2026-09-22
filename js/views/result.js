@@ -1,5 +1,6 @@
 // 結果画面
-import { app, loadAudio, downloadAudio, navigate } from '../app.js';
+import { app, loadAudio, downloadAudio, navigate, reanalyze } from '../app.js';
+import { ANALYSIS_VERSION } from '../analysis/report.js';
 import { h, toast, scoreColor, fmtDate } from '../ui/dom.js';
 import { drawRadar } from '../ui/charts.js';
 import { Timeline } from '../ui/timeline.js';
@@ -108,6 +109,12 @@ export async function renderResult(main, [id]) {
         delta != null ? h('div.delta', h('span', { class: delta >= 0 ? 'up' : 'down' }, `前回（${fmtDate(prev.date)}）から ${delta >= 0 ? '+' : ''}${delta.toFixed(2)}`)) : null,
         r.reliability < 0.6 ? h('div.tiny', { style: { marginTop: '6px' } }, '※ 歌唱時間が短いため参考値です') : null
       ),
+      (r.version || 1) < ANALYSIS_VERSION
+        ? h('div.card.row',
+            h('div.small.grow', '採点方式が新しくなりました。この録音を最新の方式で採点し直せます。'),
+            reanalyzeBtn()
+          )
+        : null,
       h('div.card', h('div.teacher', h('div.avatar', '🎤'), h('div.bubble', c.summary))),
       h('div.card',
         h('h2', '項目別スコア'),
@@ -194,7 +201,8 @@ export async function renderResult(main, [id]) {
             },
           }, '計測値をコピー'),
           h('span.tiny', { style: { marginLeft: '8px' } }, '採点の調整用（音声は含みません）')
-        )
+        ),
+        h('div', { style: { marginTop: '8px' } }, reanalyzeBtn('最新の方式で再解析'))
       ),
       h('div.row.wrap', { style: { gap: '8px' } },
         h('button.btn.primary.grow', { onclick: () => { app.songTitle = session.title === '無題' ? '' : session.title; navigate('#/'); } }, 'もう一度歌う'),
@@ -219,6 +227,25 @@ export async function renderResult(main, [id]) {
       )
     )
   );
+
+  function reanalyzeBtn(label = '再解析') {
+    const b = h('button.btn.small', {
+      onclick: async () => {
+        b.disabled = true;
+        b.textContent = '解析中…';
+        try {
+          await reanalyze(id);
+          toast('最新の方式で採点し直しました');
+          navigate(`#/result/${id}`);
+        } catch (e) {
+          toast(e.message || '再解析できませんでした');
+          b.disabled = false;
+          b.textContent = label;
+        }
+      },
+    }, label);
+    return b;
+  }
 
   // レーダーとスコアのアニメーション
   requestAnimationFrame(() => drawRadar(radar, cats, prev ? prev.categories : null));
